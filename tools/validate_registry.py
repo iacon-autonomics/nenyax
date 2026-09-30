@@ -1,4 +1,4 @@
-"""Validate registry/plugins.toml (CI runs this on every PR that touches it).
+"""Validate registry/plugins.toml (run before merging any PR that touches it).
 
 python tools/validate_registry.py              # schema checks only
 python tools/validate_registry.py --install    # also pip-install each plugin and check that

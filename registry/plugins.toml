@@ -1,7 +1,8 @@
 # The public registry of third-party Nenyax plugins.
 #
 # Anyone (companies included) can list a plugin by opening a PR that adds one [[plugin]] entry.
-# CI installs the package and runs its conformance test; entries that fail are not merged.
+# Before merging, maintainers run `python tools/validate_registry.py --install`, which installs the
+# package and checks its entry point; entries that fail are not merged.
 # Plugins work without being listed here: installing the package is enough. Listing makes them
 # discoverable via `nenyax plugins --registry` and the docs.
 #

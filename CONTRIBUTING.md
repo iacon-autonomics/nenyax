@@ -20,8 +20,9 @@ cd nenyax-acme && pip install -e '.[dev]' && pytest     # passes on day one
 3. Publish to PyPI. Once installed, users see it in `nenyax plugins`, and can pick it by name
    in Python or config (`use = "acme"`).
 4. **Get listed:** open a PR here that adds one `[[plugin]]` entry to
-   [`registry/plugins.toml`](registry/plugins.toml). CI installs your package and checks that its
-   entry point loads.
+   [`registry/plugins.toml`](registry/plugins.toml). Run
+   `python tools/validate_registry.py --install` first: it installs your package and checks that its
+   entry point loads, and maintainers run the same check before merging.
 
 Extension points:
 
