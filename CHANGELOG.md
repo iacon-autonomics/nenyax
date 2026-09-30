@@ -3,7 +3,15 @@
 All notable changes are listed here. The contract (`nenyax.types`) is versioned separately as
 `PROTOCOL_VERSION`.
 
-## 0.1.0a1 (first public alpha)
+## 0.1.0a2 (unreleased)
+
+- Package metadata: author, homepage, repository, issues, changelog and Discord links.
+- Branded README; security reports go to dev@iaconautonomics.com.
+- Docker sandboxes: `advertise_host` for controllers that run inside containers.
+- Learners: Dr. GRPO, DAPO, RLOO, REINFORCE, REINFORCE++-style, GSPO, configurable `pg`,
+  rejection sampling and DPO.
+
+## 0.1.0a1 (first public alpha, on PyPI)
 
 Contract `0.1`.
 

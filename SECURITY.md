@@ -47,5 +47,5 @@ own machine anyway.
 
 ## Reporting a vulnerability
 
-Please do not open a public issue. Email the maintainers (see `pyproject.toml`) with a
-description and reproduction. We aim to acknowledge within three working days.
+Please do not open a public issue. Email **dev@iaconautonomics.com** with a description and a
+reproduction. We aim to acknowledge within three working days.

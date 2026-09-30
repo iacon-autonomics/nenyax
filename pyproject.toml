@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nenyax"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "One contract for every RL environment: load any format, drive it with any policy, get a judged trajectory."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
-authors = [{ name = "Iacon Autonomics" }]
+authors = [{ name = "Iacon Autonomics", email = "dev@iaconautonomics.com" }]
 keywords = ["reinforcement-learning", "rl-environments", "openenv", "llm", "agents"]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
@@ -19,6 +19,13 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = ["pydantic>=2.6,<3"]
+
+[project.urls]
+Homepage = "https://iaconautonomics.com"
+Repository = "https://github.com/iacon-autonomics/nenyax"
+Issues = "https://github.com/iacon-autonomics/nenyax/issues"
+Changelog = "https://github.com/iacon-autonomics/nenyax/blob/main/CHANGELOG.md"
+Discord = "https://discord.gg/DTM8YkrSrd"
 
 [project.optional-dependencies]
 gymnasium = ["gymnasium>=1.0,<2"]

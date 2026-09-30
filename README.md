@@ -1,8 +1,32 @@
-# Nenyax
+<p align="center">
+  <a href="https://iaconautonomics.com"><img src="docs/assets/iacon-icon.png" width="72" alt="Iacon Autonomics"></a>
+</p>
 
-**One contract for every RL environment.** Load an environment from any framework, drive it with
-any policy or model, and get back the same judged trajectory, with an honest measurement of how
-far that environment actually gets.
+<h1 align="center">Nenyax</h1>
+
+<p align="center">
+  <b>One contract for every RL environment.</b><br>
+  Load any format, drive it with any model or policy, judge it your way, improve it with any learner.
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/nenyax/"><img src="https://img.shields.io/pypi/v/nenyax?include_prereleases&color=171717" alt="PyPI"></a>
+  <a href="https://pypi.org/project/nenyax/"><img src="https://img.shields.io/pypi/pyversions/nenyax?color=171717" alt="Python"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-171717" alt="License"></a>
+  <a href="https://discord.gg/DTM8YkrSrd"><img src="https://img.shields.io/badge/discord-join-171717" alt="Discord"></a>
+</p>
+
+<p align="center">
+  An open-source project by <a href="https://iaconautonomics.com">Iacon Autonomics</a>, the team behind
+  <a href="https://iaconautonomics.com">Optimus</a>, the autonomous RL engineer.
+</p>
+
+```bash
+pip install --pre nenyax
+```
+
+Load an environment from any framework, drive it with any policy or model, and get back the same
+judged trajectory, with an honest measurement of how far that environment actually gets.
 
 ```python
 import nenyax
@@ -304,6 +328,14 @@ and what we learned building it in [docs/learnings.md](docs/learnings.md). Known
 - Verifiers v1 starts its interception proxy once per rollout. It is correct but slow; pooling is planned.
 - Token ids are captured when the upstream returns them (vLLM, SGLang). Nenyax never re-tokenizes.
 
+## Community
+
+- Questions and ideas: [Discord](https://discord.gg/DTM8YkrSrd)
+- Bugs and integration requests: [GitHub issues](https://github.com/iacon-autonomics/nenyax/issues)
+- Contributing a driver, sandbox, learner or other plugin: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security reports: [SECURITY.md](SECURITY.md)
+- Updates: [x.com/iaconhq](https://x.com/iaconhq) · [LinkedIn](https://www.linkedin.com/company/iacon-autonomics)
+
 ## License
 
-Apache-2.0
+Apache-2.0. Copyright 2026 Iacon Autonomics.
