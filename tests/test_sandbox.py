@@ -139,7 +139,10 @@ def test_signal_kill_is_reported_as_killed_not_timeout():
 def test_docker_memory_bomb_is_killed_and_host_survives():
     with sandbox.get("docker").create(SandboxSpec(memory_mb=256)) as sb:
         r = sb.exec('python3 -c "x = bytearray(2 * 1024**3)"', timeout_s=30)
-        assert r.killed and not r.timed_out
+        # Either outcome means the limit held: the kernel refuses the allocation (MemoryError,
+        # typical on Linux hosts) or the OOM killer stops the process (typical on Docker Desktop).
+        assert not r.ok and not r.timed_out
+        assert r.killed or "MemoryError" in r.stderr, r
         assert sb.exec("echo alive").ok
 
 

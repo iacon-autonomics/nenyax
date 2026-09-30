@@ -49,6 +49,8 @@ class DockerSandbox(Sandbox):
             str(spec.cpus),
             "--memory",
             f"{spec.memory_mb}m",
+            "--memory-swap",
+            f"{spec.memory_mb}m",  # no swap beyond the limit
             "--pids-limit",
             "512",
             "-w",
