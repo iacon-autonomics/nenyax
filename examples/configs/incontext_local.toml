@@ -1,0 +1,31 @@
+# Improve any chat model on reasoning-gym arithmetic by learning from its own best episodes.
+# Swap [model] for any provider in `nenyax integrations`; swap [learner].use for grpo/tinker/yours.
+
+[env]
+uri = "reasoning_gym:basic_arithmetic?size=40&seed=5"
+
+[model]
+provider = "mlx"                           # vllm | ollama | openrouter | together | ...
+base_url = "http://127.0.0.1:18950/v1"     # omit to use the provider's default
+name = "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+temperature = 0.9
+max_tokens = 256
+
+[judge]                                    # env verdict plus a small format bonus
+use = "weighted"
+parts = [
+  { use = "env", weight = 1.0 },
+  { use = "regex", pattern = "^\\s*<answer>.*</answer>\\s*$", weight = 0.2 },
+]
+
+[learner]
+use = "incontext"
+shots = 3
+
+[train]
+rounds = 3
+group_size = 4
+batch = 6
+
+[[telemetry]]
+use = "opentelemetry"

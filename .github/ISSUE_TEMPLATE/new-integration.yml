@@ -1,0 +1,32 @@
+name: New integration or plugin
+description: Propose connecting a platform, format, sandbox, model provider, trainer, judge or telemetry tool
+labels: ["integration"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options: [driver (environment format), sandbox, provider (models), hub (environment catalog), learner (training), judge (rewards), telemetry, other]
+    validations: {required: true}
+  - type: input
+    id: name
+    attributes: {label: Name, placeholder: "e.g. Acme Sandboxes"}
+    validations: {required: true}
+  - type: dropdown
+    id: route
+    attributes:
+      label: Where should it live?
+      options:
+        - Its own package (we maintain it; please list it in registry/plugins.toml)
+        - Nenyax core (widely used, open source)
+        - Not sure
+  - type: textarea
+    id: api
+    attributes:
+      label: Public API or SDK
+      description: Package name, auth (env var), docs link. What does Nenyax need to call?
+  - type: textarea
+    id: test
+    attributes:
+      label: How can it be tested?
+      description: Free tier? Local mode? We only list what passes conformance.

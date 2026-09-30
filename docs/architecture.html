@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nenyax Protocol</title>
+<style>
+:root{
+  --bg:#f7f6f2; --panel:#ffffff; --ink:#1b1b1a; --muted:#6b6a65; --line:#dcdad3;
+  --core:#1f4fd1; --core-bg:#e9efff; --step:#0f8a5f; --step-bg:#e6f5ee;
+  --roll:#b35c00; --roll-bg:#fff1e0; --task:#8a2bb3; --task-bg:#f5e9fb;
+  --audit:#c0263b; --audit-bg:#fdebee; --chip:#f1f0eb;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121212; --panel:#1b1b1d; --ink:#ecebe6; --muted:#9c9a93; --line:#2e2e31;
+    --core:#7fa2ff; --core-bg:#1a2340; --step:#4fd1a1; --step-bg:#12291f;
+    --roll:#ffb35c; --roll-bg:#2e2010; --task:#d38bff; --task-bg:#2a1733;
+    --audit:#ff7a8a; --audit-bg:#32161b; --chip:#242427;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121212; --panel:#1b1b1d; --ink:#ecebe6; --muted:#9c9a93; --line:#2e2e31;
+  --core:#7fa2ff; --core-bg:#1a2340; --step:#4fd1a1; --step-bg:#12291f;
+  --roll:#ffb35c; --roll-bg:#2e2010; --task:#d38bff; --task-bg:#2a1733;
+  --audit:#ff7a8a; --audit-bg:#32161b; --chip:#242427;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:28px;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:18px;margin:40px 0 12px}
+.sub{color:var(--muted);margin:0 0 24px}
+.band{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:16px;margin:0 auto}
+.label{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px;white-space:nowrap}
+.chip b{font-weight:600}
+.chip small{color:var(--muted)}
+.arrow{text-align:center;color:var(--muted);font-size:20px;line-height:1;margin:6px 0}
+.arrow span{font-size:12px;display:block;margin-top:2px}
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.mode{border-radius:12px;padding:12px;border:1px solid var(--line)}
+.mode h3{margin:0 0 4px;font-size:15px}
+.mode p{margin:0 0 8px;font-size:13px;color:var(--muted)}
+.mode.step{background:var(--step-bg);border-color:var(--step)} .mode.step h3{color:var(--step)}
+.mode.roll{background:var(--roll-bg);border-color:var(--roll)} .mode.roll h3{color:var(--roll)}
+.mode.task{background:var(--task-bg);border-color:var(--task)} .mode.task h3{color:var(--task)}
+.router{margin-top:12px;border:1px dashed var(--muted);border-radius:10px;padding:10px 12px;font-size:13px}
+.router code,.core code,td code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace}
+.core{background:var(--core-bg);border:2px solid var(--core);border-radius:14px;padding:16px;max-width:780px;margin:0 auto}
+.core .label{color:var(--core)}
+.core-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;font-size:12.5px}
+.cell b{display:block;font-size:13px;margin-bottom:2px}
+.lifecycle{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
+.lifecycle .op{background:var(--panel);border:1px solid var(--core);color:var(--core);border-radius:6px;padding:2px 8px;font-family:ui-monospace,Menlo,monospace}
+.side{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.aud{background:var(--audit-bg);border:1px solid var(--audit);border-radius:12px;padding:12px}
+.aud h3{margin:0 0 6px;color:var(--audit);font-size:15px}
+.aud ul{margin:0;padding-left:18px;font-size:13px}
+.narrow{max-width:900px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--chip);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.flow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.fstep{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12.5px;position:relative}
+.fstep .n{font-weight:700;color:var(--core)}
+.note{color:var(--muted);font-size:12.5px;margin-top:10px}
+.toggle{position:fixed;top:12px;right:12px;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}
+@media (max-width:820px){
+  .modes,.side{grid-template-columns:1fr}
+  .core-grid{grid-template-columns:repeat(2,1fr)}
+  .flow{grid-template-columns:repeat(2,1fr)}
+  table{display:block;overflow-x:auto}
+}
+</style>
+</head>
+<body>
+<button class="toggle" onclick="(function(){var r=document.documentElement;var d=r.getAttribute('data-theme');var dark=d?d==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.setAttribute('data-theme',dark?'light':'dark')})()">Theme</button>
+<div class="wrap">
+  <h1>Nenyax: a two-layer protocol on top of OpenEnv</h1>
+  <p class="sub">Many environment formats come in at the top, many trainers connect at the bottom, and one narrow contract sits in the middle. OpenEnv stays the standard; Nenyax adds the adapters that route every other format into it, plus the audit that makes the result trustworthy.</p>
+
+  <!-- SOURCES -->
+  <div class="band">
+    <div class="label"><span>Environment sources · any format</span><span>port in ↓ &nbsp; port out ↑</span></div>
+    <div class="chips">
+      <span class="chip"><b>OpenEnv</b> <small>Meta · HF (native)</small></span>
+      <span class="chip"><b>Verifiers</b> <small>Prime Intellect</small></span>
+      <span class="chip"><b>Harbor</b> <small>Laude · Terminal-Bench</small></span>
+      <span class="chip"><b>NeMo Gym</b> <small>NVIDIA</small></span>
+      <span class="chip"><b>ORS / OpenReward</b> <small>General Reasoning</small></span>
+      <span class="chip"><b>Gymnasium · PettingZoo</b> <small>Farama</small></span>
+      <span class="chip"><b>dm_env · OpenSpiel</b> <small>Google DeepMind</small></span>
+      <span class="chip"><b>MuJoCo Playground</b> <small>Google DeepMind</small></span>
+      <span class="chip"><b>AndroidWorld</b> <small>Google</small></span>
+      <span class="chip"><b>BrowserGym</b> <small>ServiceNow</small></span>
+      <span class="chip"><b>Reasoning Gym · GEM · SkyRL-Gym</b></span>
+      <span class="chip"><b>HUD</b> <small>MCP-based</small></span>
+      <span class="chip"><b>nenyax build</b> <small>codebases · industries</small></span>
+    </div>
+  </div>
+
+  <div class="arrow">↓<span>the router reads each source's format and picks a driver</span></div>
+
+  <!-- LAYER 2 -->
+  <div class="band">
+    <div class="label"><span>Layer 2 · adapters and router</span><span>one driver per format, grouped by how the environment is driven</span></div>
+    <div class="modes">
+      <div class="mode step">
+        <h3>Step mode</h3>
+        <p>The trainer drives each step with <code>reset / step</code>, or with a tool call per turn.</p>
+        <div class="chips"><span class="chip">OpenEnv</span><span class="chip">Gymnasium</span><span class="chip">dm_env</span><span class="chip">OpenSpiel</span><span class="chip">PettingZoo</span><span class="chip">BrowserGym</span><span class="chip">ORS</span><span class="chip">GEM</span></div>
+      </div>
+      <div class="mode roll">
+        <h3>Rollout mode</h3>
+        <p>The environment runs the whole multi-turn loop against a model endpoint and returns a scored trajectory.</p>
+        <div class="chips"><span class="chip">Verifiers</span><span class="chip">NeMo Gym</span><span class="chip">Reasoning Gym</span></div>
+      </div>
+      <div class="mode task">
+        <h3>Task mode</h3>
+        <p>A container holds the task. An agent harness runs inside it, and tests grade the final state.</p>
+        <div class="chips"><span class="chip">Harbor</span><span class="chip">Terminal-Bench</span><span class="chip">SWE-bench-style</span><span class="chip">AndroidWorld</span></div>
+      </div>
+    </div>
+    <div class="router"><b>Router:</b> <code>manifest.source.format</code> → load the driver → negotiate <code>capabilities</code> → expose the Layer 1 contract. A driver never pretends to support something it can't: a task-mode environment reports <code>branchable:false</code>, and the trainer adapts.</div>
+  </div>
+
+  <div class="arrow">↓<span>every driver exposes the same contract</span></div>
+
+  <!-- LAYER 1 -->
+  <div class="core">
+    <div class="label"><span>Layer 1 · Nenyax core contract (OpenEnv plus proposed RFCs)</span><span>the narrow waist</span></div>
+    <div class="core-grid">
+      <div class="cell"><b>Manifest</b>identity, version, licence, format, mode</div>
+      <div class="cell"><b>Capabilities</b>resettable, branchable, parallel, risk, real-world</div>
+      <div class="cell"><b>Actions</b>MCP tools (OpenEnv RFC 003)</div>
+      <div class="cell"><b>Judgment</b>verifier, rubric or external reward; versioned, with confidence</div>
+      <div class="cell"><b>Trajectory</b>observations, actions, tokens and logprobs, judgment</div>
+    </div>
+    <div class="lifecycle">
+      <span class="op">open</span>→<span class="op">sample</span>→<span class="op">act / observe</span>→<span class="op">judge</span>→<span class="op">close</span>
+      <span style="color:var(--muted)">&nbsp;· rollout and task modes run this loop internally and return the same trajectory</span>
+    </div>
+  </div>
+
+  <div class="arrow">↓<span>trainer bindings</span></div>
+
+  <div class="band">
+    <div class="label"><span>Trainers · any backend</span></div>
+    <div class="chips">
+      <span class="chip">TRL</span><span class="chip">verl</span><span class="chip">prime-rl</span><span class="chip">SkyRL</span><span class="chip">NeMo RL</span><span class="chip">Unsloth</span><span class="chip">Tinker</span><span class="chip">OpenRLHF</span><span class="chip">ART</span><span class="chip">slime</span>
+    </div>
+  </div>
+
+  <!-- SIDE LANES -->
+  <div class="side">
+    <div class="aud">
+      <h3>Audit gates (every environment, ported or built)</h3>
+      <ul>
+        <li>Builds and boots cleanly; the network is isolated</li>
+        <li>The reference solution passes and deliberately broken solutions fail</li>
+        <li>A red-team agent attempts reward hacks</li>
+        <li>Results are the same when re-run</li>
+        <li>Difficulty is calibrated: a baseline model passes between about 3% and 80%</li>
+        <li>No contamination or leakage, such as a git history that reveals the answer</li>
+        <li>→ a standard <b>quality report</b> ships with the environment</li>
+      </ul>
+    </div>
+    <div class="aud" style="background:var(--core-bg);border-color:var(--core)">
+      <h3 style="color:var(--core)">Builder skills (for any coding agent)</h3>
+      <ul>
+        <li>Installed as an MCP server or skill in Claude Code, Codex, Optimus, OpenCode and others</li>
+        <li><code>build</code> from a repo, an OpenAPI spec, an app or a domain's documents</li>
+        <li>Tools for containerizing, mocking, snapshotting and mining tasks</li>
+        <li>The agent proposes; the audit gates accept or reject</li>
+        <li>One codebase can yield several environments: coding, operator, support, SRE, data, security</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- MAPPING TABLE -->
+  <h2>How each format maps onto the core contract</h2>
+  <table>
+    <tr><th>Format</th><th>Mode</th><th>Native shape</th><th>What the driver does</th></tr>
+    <tr><td>OpenEnv</td><td>step</td><td>reset/step over HTTP/WebSocket, MCP tools</td><td>Passes through, adds the manifest and audit</td></tr>
+    <tr><td>Verifiers</td><td>rollout</td><td>dataset + harness + rubric (v1 Taskset/Harness/Runtime)</td><td>Points its harness at the trainer's model endpoint through a proxy that records tokens and logprobs; maps rubric → judgment</td></tr>
+    <tr><td>Harbor</td><td>task</td><td><code>task.toml</code> + Dockerfile + tests</td><td>Runs the container, captures the agent's calls through a proxy, maps test results → judgment; <code>branchable:false</code></td></tr>
+    <tr><td>NeMo Gym</td><td>rollout</td><td>resource, agent and model servers</td><td>Registers the trainer as the model server; maps resource-server verification → judgment</td></tr>
+    <tr><td>ORS</td><td>step (tools)</td><td>HTTP/SSE, actions are tools, episode rewards</td><td>Mostly a direct mapping; rewards → judgment</td></tr>
+    <tr><td>Gymnasium / dm_env</td><td>step</td><td>numeric or text reset/step</td><td>Wraps it as an OpenEnv server; converts spaces to schemas</td></tr>
+    <tr><td>PettingZoo / OpenSpiel</td><td>step, multi-agent</td><td>agents take turns or act at the same time</td><td>Exposes a seat for each agent; <code>participants:n</code></td></tr>
+  </table>
+
+  <!-- EXAMPLE -->
+  <h2>Example: a Harbor task, trained in TRL</h2>
+  <div class="flow">
+    <div class="fstep"><span class="n">1</span> <code>nenyax import harbor://terminal-bench/fix-git</code></div>
+    <div class="fstep"><span class="n">2</span> The router detects task mode and loads the Harbor driver</div>
+    <div class="fstep"><span class="n">3</span> The audit runs: boots, isolation, test mutation, hack attempts → report</div>
+    <div class="fstep"><span class="n">4</span> The environment is exposed as OpenEnv plus a manifest (<code>branchable:false</code>)</div>
+    <div class="fstep"><span class="n">5</span> TRL's <code>environment_factory</code> opens sessions; the proxy records tokens</div>
+    <div class="fstep"><span class="n">6</span> Tests → judgment → reward → policy update. Can export back to Verifiers or Harbor.</div>
+  </div>
+  <p class="note">The format list reflects my research as of September 2026. I haven't checked the Google entries (dm_env, OpenSpiel, MuJoCo Playground, AndroidWorld) for current activity. The mapping column is a design proposal and hasn't been implemented.</p>
+</div>
+</body>
+</html>

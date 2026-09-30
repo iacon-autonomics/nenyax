@@ -1,0 +1,20 @@
+# Hosted LoRA training on Thinking Machines Tinker; the environment stays local.
+# export TINKER_API_KEY=...   pip install 'nenyax[tinker]'
+[env]
+uri = "verifiers:gsm8k"            # `nenyax search prime gsm8k`, then fetch
+
+[learner]
+use = "tinker"
+model = "Qwen/Qwen3-8B"            # any base model Tinker offers
+lr = 4e-5
+loss_fn = "importance_sampling"    # or ppo | cispo | dro
+
+[train]
+rounds = 20
+group_size = 8
+batch = 16
+concurrency = 8
+
+[[telemetry]]
+use = "wandb"
+project = "gsm8k-tinker"

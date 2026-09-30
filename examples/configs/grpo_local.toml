@@ -1,0 +1,15 @@
+# Real weight updates on a local open model (PyTorch; CUDA, Apple MPS or CPU). pip install 'nenyax[train]'
+[env]
+uri = "reasoning_gym:basic_arithmetic?size=200&seed=1"
+
+[learner]
+use = "grpo"
+model = "Qwen/Qwen2.5-0.5B-Instruct"   # any Hugging Face causal LM
+lr = 3e-6
+max_new_tokens = 128
+temperature = 1.0
+
+[train]
+rounds = 10
+group_size = 8
+batch = 4

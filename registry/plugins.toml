@@ -1,0 +1,30 @@
+# The public registry of third-party Nenyax plugins.
+#
+# Anyone (companies included) can list a plugin by opening a PR that adds one [[plugin]] entry.
+# CI installs the package and runs its conformance test; entries that fail are not merged.
+# Plugins work without being listed here: installing the package is enough. Listing makes them
+# discoverable via `nenyax plugins --registry` and the docs.
+#
+# Fields
+#   name         entry-point name users type, e.g. use = "acme" in a config
+#   kind         driver | sandbox | provider | hub | learner | judge | telemetry
+#   package      PyPI distribution that provides the entry point
+#   maintainer   person or company responsible
+#   repo         source URL
+#   license      SPDX id
+#   open_source  true if the plugin's source is open (the service behind it may not be)
+#   needs        credentials or software required, e.g. ["ACME_API_KEY"]
+#   test         pytest target that runs the plugin's nenyax.testing conformance check
+#
+# Example (remove the comment markers to list a real plugin):
+#
+# [[plugin]]
+# name = "acme"
+# kind = "sandbox"
+# package = "nenyax-acme"
+# maintainer = "Acme Inc."
+# repo = "https://github.com/acme/nenyax-acme"
+# license = "Apache-2.0"
+# open_source = true
+# needs = ["ACME_API_KEY"]
+# test = "tests/test_conformance.py"

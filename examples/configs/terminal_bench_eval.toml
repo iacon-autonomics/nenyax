@@ -1,0 +1,19 @@
+# Improve a hosted model's agent on Terminal-Bench tasks by learning from its own best episodes.
+# `nenyax search harbor terminal-bench` then fetch; export OPENROUTER_API_KEY=...
+[env]
+uri = "harbor:~/.cache/nenyax/harbor/terminal-bench@2.0"
+
+[model]
+provider = "openrouter"
+name = "qwen/qwen3-coder"
+temperature = 0.7
+
+[learner]
+use = "incontext"
+shots = 2
+
+[train]
+rounds = 3
+group_size = 2
+batch = 4
+concurrency = 4
