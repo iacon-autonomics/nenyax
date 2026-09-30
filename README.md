@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/iacon-autonomics/nenyax/actions/workflows/ci.yml"><img src="https://github.com/iacon-autonomics/nenyax/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://pypi.org/project/nenyax/"><img src="https://img.shields.io/pypi/v/nenyax?include_prereleases&color=171717" alt="PyPI"></a>
   <a href="https://pypi.org/project/nenyax/"><img src="https://img.shields.io/pypi/pyversions/nenyax?color=171717" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-171717" alt="License"></a>
@@ -319,7 +320,7 @@ See [docs/writing-a-driver.md](docs/writing-a-driver.md). Prove it works with
 
 ## Status
 
-Alpha (`0.1.0a1`, contract `0.1`), tested on macOS and Linux arm64 with Python 3.12. The contract
+Alpha (`0.1.0a1`, contract `0.1`), tested on macOS, Linux arm64 and Linux x86-64 (CI) with Python 3.11 to 3.13. The contract
 is described in [docs/protocol.md](docs/protocol.md), what changed in [CHANGELOG.md](CHANGELOG.md),
 and what we learned building it in [docs/learnings.md](docs/learnings.md). Known gaps:
 
