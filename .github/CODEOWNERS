@@ -1,10 +1,10 @@
 # Core contract and conformance changes need a maintainer review.
-/src/nenyax/types.py            @nenyax/maintainers
-/src/nenyax/environment.py      @nenyax/maintainers
-/src/nenyax/conformance.py      @nenyax/maintainers
-/src/nenyax/sandbox/base.py     @nenyax/maintainers
-/src/nenyax/learners/base.py    @nenyax/maintainers
+/src/nenyax/types.py            @devshahofficial
+/src/nenyax/environment.py      @devshahofficial
+/src/nenyax/conformance.py      @devshahofficial
+/src/nenyax/sandbox/base.py     @devshahofficial
+/src/nenyax/learners/base.py    @devshahofficial
 # Built-in plugins: a plugin's maintainers can be added per directory or file.
-/src/nenyax/formats/            @nenyax/maintainers
-/src/nenyax/integrations/       @nenyax/maintainers
-/registry/plugins.toml          @nenyax/maintainers
+/src/nenyax/formats/            @devshahofficial
+/src/nenyax/integrations/       @devshahofficial
+/registry/plugins.toml          @devshahofficial
