@@ -5,15 +5,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ["3.11", "3.12"]
+        python: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv venv --python ${{ matrix.python }}
       - run: uv pip install -e '.[dev,gymnasium,reasoning-gym,openenv,verifiers,harbor]'
-      - run: uv run ruff check src tests tools
-      - run: uv run ruff format --check src tests tools
-      - run: uv run pytest -q
+      - run: .venv/bin/ruff check src tests tools
+      - run: .venv/bin/ruff format --check src tests tools
+      - run: .venv/bin/pytest -q -p no:warnings
 
   registry:
     runs-on: ubuntu-latest
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv venv --python 3.12 && uv pip install -e .
-      - run: uv run python tools/validate_registry.py --install
+      - run: .venv/bin/python tools/validate_registry.py --install
 
   scaffold:
     # every `nenyax new-plugin` kind must produce a package that passes its own conformance test
@@ -33,5 +33,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv venv --python 3.12 && uv pip install -e '.[dev]'
-      - run: uv run nenyax new-plugin ${{ matrix.kind }} demo --dest /tmp/p
-      - run: uv pip install -e /tmp/p/nenyax-demo && uv run pytest -q /tmp/p/nenyax-demo
+      - run: .venv/bin/nenyax new-plugin ${{ matrix.kind }} demo --dest /tmp/p
+      - run: uv pip install -e /tmp/p/nenyax-demo && .venv/bin/pytest -q /tmp/p/nenyax-demo

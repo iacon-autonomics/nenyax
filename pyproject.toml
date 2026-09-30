@@ -31,7 +31,7 @@ Discord = "https://discord.gg/DTM8YkrSrd"
 gymnasium = ["gymnasium>=1.0,<2"]
 reasoning-gym = ["reasoning-gym>=0.1.20,<0.2"]
 verifiers = ["verifiers>=0.3,<0.4"]
-harbor = ["harbor>=0.23,<0.24"]
+harbor = ["harbor>=0.23,<0.24; python_version >= '3.12'"]  # harbor itself needs 3.12+
 openenv = ["openenv>=0.6,<0.7"]
 otel = ["opentelemetry-api>=1.25", "opentelemetry-sdk>=1.25"]
 mlflow = ["mlflow>=2.14"]
