@@ -221,12 +221,144 @@ def _policy(env: Any, model: dict[str, Any] | None, task: Any = None) -> Any:
     raise RuntimeError("this environment has no reference policy; choose a model")
 
 
-def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any]:
-    """Run one job. Pure Nenyax SDK calls; the same thing works from a script."""
+def _callbacks(config: dict[str, Any]) -> list[Any]:
+    """Telemetry from the stack's tracking plugs (W&B, MLflow, OTel), keyed by the connections'
+    env vars. A plug that can't start is reported, never fatal to the run."""
+    from .config import build
+
+    stack = config.get("stack") or {}
+    slots = stack.get("tracking") or []
+    if isinstance(slots, dict):
+        slots = [slots]
+    project = config.get("project") or "nenyax"
+    out = []
+    for slot in slots:
+        plug = (slot or {}).get("plug")
+        if not plug:
+            continue
+        options = dict(slot.get("config") or {})
+        if plug in ("wandb", "mlflow"):
+            options.setdefault(
+                "project" if plug == "wandb" else "experiment", project.replace("/", "-")
+            )
+        try:
+            out.append(build("telemetry", {"use": plug, **options}))
+        except Exception as e:  # noqa: BLE001 - missing package or bad key: keep running
+            log.warning("tracking plug %s unavailable: %s", plug, e)
+    return out
+
+
+def _close(callbacks: list[Any]) -> None:
+    for cb in callbacks:
+        with contextlib.suppress(Exception):
+            getattr(cb, "close", lambda: None)()
+
+
+def _observe(callbacks: list[Any], traj: Any) -> None:
+    for cb in callbacks:
+        with contextlib.suppress(Exception):
+            cb.on_trajectory(traj)
+
+
+class _Collect:
+    """Keeps every training episode, for the trajectory dataset artifacts."""
+
+    def __init__(self) -> None:
+        self.trajectories: list[Any] = []
+
+    def on_trajectory(self, traj: Any) -> None:
+        self.trajectories.append(traj)
+
+
+def _artifacts(outdir: Any, trajectories: list[Any], learner: Any = None) -> list[dict[str, Any]]:
+    """Write what a run produced (datasets, prompts, checkpoints) under ``outdir``."""
+    import tarfile
+    from pathlib import Path
+
+    from .integrations import export
+
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    items: list[dict[str, Any]] = []
+    for fmt in ("raw", "sft", "dpo"):
+        try:
+            rows = export.to_rows(trajectories, format=fmt)
+        except Exception:  # noqa: BLE001 - e.g. no pairs for DPO
+            continue
+        if rows:
+            path = export.to_jsonl(rows, outdir / f"trajectories-{fmt}.jsonl")
+            items.append(
+                {
+                    "path": str(path),
+                    "name": path.name,
+                    "kind": "dataset",
+                    "meta": {"format": fmt, "rows": len(rows)},
+                }
+            )
+    bank = getattr(learner, "bank", None)
+    if bank is not None and getattr(bank, "items", None):
+        shots = [
+            {
+                "score": score,
+                "messages": [m.model_dump(mode="json", exclude_none=True) for m in turns],
+            }
+            for score, _key, turns in bank.items
+        ]
+        path = outdir / "prompt-examples.json"
+        path.write_text(json.dumps(shots, indent=2))
+        items.append(
+            {
+                "path": str(path),
+                "name": path.name,
+                "kind": "prompt",
+                "meta": {"examples": len(shots)},
+            }
+        )
+    if learner is not None and callable(getattr(learner, "save", None)):
+        try:
+            ckpt = outdir / "checkpoint"
+            learner.save(str(ckpt))
+            archive = outdir / "checkpoint.tar.gz"
+            with tarfile.open(archive, "w:gz") as tar:
+                tar.add(ckpt, arcname="checkpoint")
+            adapter = any(ckpt.glob("adapter_config.json"))
+            items.append(
+                {
+                    "path": str(archive),
+                    "name": archive.name,
+                    "kind": "adapter" if adapter else "checkpoint",
+                    "meta": {},
+                }
+            )
+        except Exception as e:  # noqa: BLE001 - a learner without weights to save
+            log.info("no checkpoint saved: %s", e)
+    return items
+
+
+def execute(
+    kind: str, config: dict[str, Any], events: _Events, *, outdir: Any = None
+) -> dict[str, Any]:
+    """Run one job. Pure Nenyax SDK calls; the same thing works from a script.
+
+    Files the run produced are listed under ``_artifacts`` in the result (written in ``outdir``);
+    the runner stores them with the stack's storage plug.
+    """
+    try:
+        return _execute(kind, config, events, outdir)
+    finally:
+        _close(getattr(events, "_callbacks", []))
+
+
+def _execute(kind: str, config: dict[str, Any], events: _Events, outdir: Any) -> dict[str, Any]:
     from . import check as conformance
     from .config import build
+    from .sandboxed import check_requirements, plug_of
+    from .storage import scratch
     from .train import train
 
+    outdir = outdir or scratch()
+    callbacks = _callbacks(config)
+    events._callbacks = callbacks  # type: ignore[attr-defined]
     params = config.get("params") or {}
     events.emit("progress", {"stage": "loading environment"}, flush=True)
     env = _load_env(
@@ -239,11 +371,17 @@ def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any
         {"stage": "loaded", "env": env.id, "mode": env.mode.value, "tasks": env.manifest.num_tasks},
         flush=True,
     )
+    check_requirements(
+        list(env.manifest.capabilities.requires),
+        plug_of(config),
+        docker_here=bool(shutil.which("docker")),
+    )
 
     if kind == "try":
         tasks = env.tasks(limit=1)
         task = tasks[0] if tasks else None
         traj = env.rollout(_policy(env, config.get("model"), task), task=task, seed=0)
+        _observe(callbacks, traj)
         events.emit("episode", _episode(traj, 0), flush=True)
         if traj.error:
             raise RuntimeError(traj.error)
@@ -254,14 +392,21 @@ def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any
         model = config.get("model")
         scores = []
         tasks = env.tasks(limit=n) or [None] * n
+        trajs = []
         for i, task in enumerate(tasks[:n]):
             if events.cancelled:
                 raise Cancelled()
             traj = env.rollout(_policy(env, model, task), task=task, seed=i)
+            trajs.append(traj)
+            _observe(callbacks, traj)
             scores.append(traj.score or 0.0)
             events.emit("episode", _episode(traj, i))
         events.flush()
-        return {"score": sum(scores) / len(scores) if scores else 0.0, "episodes": len(scores)}
+        return {
+            "score": sum(scores) / len(scores) if scores else 0.0,
+            "episodes": len(scores),
+            "_artifacts": _artifacts(outdir, trajs),
+        }
 
     if kind == "session":
         return _serve_session(env, events)
@@ -299,6 +444,7 @@ def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any
         elif "model" not in learner_spec and config.get("model"):
             learner_spec["model"] = config["model"]["name"]  # weight learners take a model id
         learner = build("learner", learner_spec)
+        collect = _Collect()
 
         def on_round(r: Any) -> None:
             events.emit("round", asdict(r), flush=True)
@@ -313,7 +459,7 @@ def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any
             batch=int(params.get("batch", 6)),
             concurrency=int(params.get("concurrency", 1)),
             on_round=on_round,
-            callbacks=[_EpisodeForwarder(events)],
+            callbacks=[_EpisodeForwarder(events), collect, *callbacks],
         )
         per_round = int(params.get("batch", 6)) * int(params.get("group_size", 4))
         return {
@@ -322,6 +468,7 @@ def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any
             "score": result.best,
             "rounds": len(result.history),
             "episodes": per_round * len(result.history),
+            "_artifacts": _artifacts(outdir, collect.trajectories, learner),
         }
 
     raise ValueError(f"unknown run kind {kind!r}")
@@ -337,6 +484,35 @@ class _EpisodeForwarder:
         if self.seen % self.every == 0:
             self.events.emit("episode", _episode(traj, self.seen))
         self.seen += 1
+
+
+def _run_job(job: dict[str, Any], events: _Events) -> dict[str, Any]:
+    """In this process, or inside the stack's sandbox plug when it names one."""
+    from .sandboxed import SANDBOX_PLUGS, execute_in_sandbox, plug_of
+
+    kind, config = job["kind"], job["config"]
+    if kind != "session" and plug_of(config) in SANDBOX_PLUGS:
+        return execute_in_sandbox(kind, config, events, env_vars=job.get("env"))
+    return execute(kind, config, events)
+
+
+def _publish(job: dict[str, Any], result: dict[str, Any], events: _Events, client: Any) -> None:
+    """Store the run's files with the storage plug and record them; never fails the run."""
+    from . import storage
+
+    items = result.pop("_artifacts", None) or []
+    if not items:
+        return
+    try:
+        store = storage.from_stack(
+            job["config"].get("stack"), url=client.url, token=client.token, run_id=job["id"]
+        )
+        done = storage.publish(items, store, url=client.url, token=client.token, run_id=job["id"])
+        result["artifacts"] = len(done)
+        names = ", ".join(a.get("name", "") for a in done)
+        events.emit("log", {"level": "info", "message": f"saved {len(done)} artifact(s): {names}"})
+    except Exception as e:  # noqa: BLE001 - the scores are what matter; report and move on
+        events.emit("log", {"level": "warning", "message": f"artifacts not saved: {e}"})
 
 
 def _beat(client: PlatformClient, info: dict[str, Any], stop: threading.Event) -> None:
@@ -376,7 +552,8 @@ def serve(url: str, token: str, *, poll_s: float = 2.0, once: bool = False) -> N
         threading.Thread(target=_beat, args=(client, info, stop_beat), daemon=True).start()
         try:
             with job_env(job.get("env")):
-                result = execute(job["kind"], job["config"], events)
+                result = _run_job(job, events)
+                _publish(job, result, events, client)
             events.flush()
             client.call(f"/runner/runs/{run_id}/finish", {"status": "succeeded", "result": result})
         except Cancelled:

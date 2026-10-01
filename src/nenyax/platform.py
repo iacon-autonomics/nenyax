@@ -244,7 +244,6 @@ def load_package(fetch: dict[str, Any], url: str, token: str) -> Any:
 
 def load_folder(path: str | Path) -> Any:
     """Load a local environment folder by its ``nenyax.toml`` entrypoint (before pushing it)."""
-    from .config import _import
     from .environment import Environment
 
     root = Path(path).resolve()

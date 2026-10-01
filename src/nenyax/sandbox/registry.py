@@ -19,6 +19,11 @@ from .base import BackendNotConfigured, Isolation, SandboxBackend
 _BUILTIN = {
     "process": "nenyax.sandbox.process:ProcessBackend",
     "docker": "nenyax.sandbox.docker:DockerBackend",
+    # Hosted, bring your own key (nenyax.sandbox.hosted): ready once the package and key exist.
+    "e2b": "nenyax.sandbox.hosted:E2BBackend",
+    "daytona": "nenyax.sandbox.hosted:DaytonaBackend",
+    "modal": "nenyax.sandbox.hosted:ModalBackend",
+    "runloop": "nenyax.sandbox.hosted:RunloopBackend",
 }
 
 _FORK_RANK = {"none": 0, "disk": 1, "memory": 2}
