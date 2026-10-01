@@ -15,6 +15,8 @@ import logging
 import os
 import platform
 import shutil
+import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -100,6 +102,35 @@ class _Events:
 
 class Cancelled(Exception):
     pass
+
+
+@contextlib.contextmanager
+def job_env(env: dict[str, str] | None):
+    """Set a job's connection env vars (provider keys, hub tokens) only while it runs."""
+    saved = {k: os.environ.get(k) for k in env or {}}
+    os.environ.update({k: str(v) for k, v in (env or {}).items()})
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def install(spec: str, events: _Events) -> None:
+    """Install a custom component (a pip or git spec) into this runner's interpreter."""
+    events.emit("log", {"level": "info", "message": f"installing {spec}"}, flush=True)
+    proc = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--quiet", spec],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"pip install {spec} failed:\n{(proc.stderr or proc.stdout)[-2000:]}")
+    events.emit("log", {"level": "info", "message": f"installed {spec}"}, flush=True)
 
 
 def _episode(traj: Any, index: int) -> dict[str, Any]:
@@ -215,6 +246,8 @@ def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any
 
     if kind == "train":
         learner_spec = dict(config.get("learner") or {"use": "incontext"})
+        if spec := learner_spec.pop("install", None):  # your own algorithm, from pip or git
+            install(spec, events)
         if learner_spec.get("use", "incontext") == "incontext":
             learner_spec.setdefault("model", config.get("model"))
         elif "model" not in learner_spec and config.get("model"):
@@ -296,7 +329,8 @@ def serve(url: str, token: str, *, poll_s: float = 2.0, once: bool = False) -> N
 
         threading.Thread(target=_beat, args=(client, info, stop_beat), daemon=True).start()
         try:
-            result = execute(job["kind"], job["config"], events)
+            with job_env(job.get("env")):
+                result = execute(job["kind"], job["config"], events)
             events.flush()
             client.call(f"/runner/runs/{run_id}/finish", {"status": "succeeded", "result": result})
         except Cancelled:
