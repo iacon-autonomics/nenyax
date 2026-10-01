@@ -193,9 +193,28 @@ def push(path: str | Path, *, public: bool = False, org: str | None = None) -> d
 # -- loading on a runner -------------------------------------------------------------------------
 
 
+def _import_from(root: Path, entrypoint: str) -> Any:
+    """Import ``module:attr`` from ``root``. Environment folders all tend to call their module
+    ``env``; a copy cached from another folder must not answer for this one."""
+    import importlib
+
+    top = entrypoint.split(":")[0].split(".")[0]
+    cached = sys.modules.get(top)
+    where = getattr(cached, "__file__", None) or ""
+    if cached is not None and not Path(where).resolve().is_relative_to(root.resolve()):
+        for name in [m for m in sys.modules if m == top or m.startswith(f"{top}.")]:
+            del sys.modules[name]
+        importlib.invalidate_caches()
+    if str(root) in sys.path:  # this folder first, so its module wins the lookup
+        sys.path.remove(str(root))
+    sys.path.insert(0, str(root))
+    from .config import _import
+
+    return _import(entrypoint)
+
+
 def load_package(fetch: dict[str, Any], url: str, token: str) -> Any:
     """Download a pushed environment, install its requirements, and load its entrypoint."""
-    from .config import _import
     from .environment import Environment
 
     slug, version = fetch["slug"], fetch["version"]
@@ -219,7 +238,7 @@ def load_package(fetch: dict[str, Any], url: str, token: str) -> Any:
     for p in (home / "_deps", home):
         if p.exists() and str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    obj = _import(fetch["entrypoint"])
+    obj = _import_from(home, fetch["entrypoint"])
     return obj if isinstance(obj, Environment) else obj()
 
 
@@ -232,5 +251,5 @@ def load_folder(path: str | Path) -> Any:
     meta = read_manifest(root)
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
-    obj = _import(meta["entrypoint"])
+    obj = _import_from(root, meta["entrypoint"])
     return obj if isinstance(obj, Environment) else obj()

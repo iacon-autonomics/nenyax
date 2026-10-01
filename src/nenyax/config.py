@@ -109,6 +109,12 @@ def _preset(name: str) -> Callable[..., Any]:
     return make
 
 
+def _external(name: str, **kw: Any) -> Any:
+    from .trainers import ExternalLearner
+
+    return ExternalLearner(name, kw.pop("model"), **kw)
+
+
 BUILTIN: dict[str, dict[str, Callable[..., Any]]] = {
     "learner": {
         "incontext": _incontext,
@@ -128,6 +134,11 @@ BUILTIN: dict[str, dict[str, Callable[..., Any]]] = {
         "tinker": lambda **kw: _import("nenyax.learners.tinker:TinkerLearner")(
             kw.pop("model"), **kw
         ),
+        # External trainers (nenyax.trainers): each runs its own job, Nenyax gates the result.
+        **{
+            name: (lambda name=name, **kw: _external(name, **kw))
+            for name in ("trl", "unsloth", "verl", "prime_rl", "prime-rl", "openrlhf")
+        },
     },
     "judge": {
         "env": _lazy("nenyax.judges:EnvJudge"),

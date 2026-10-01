@@ -522,6 +522,51 @@ def runs_watch(args: argparse.Namespace) -> None:
     _watch(args.id)
 
 
+def _size(n: Any) -> str:
+    if not isinstance(n, int):
+        return ""
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return ""
+
+
+def runs_artifacts(args: argparse.Namespace) -> None:
+    rows = call("GET", f"/runs/{args.id}/artifacts")
+    _emit(
+        args,
+        rows,
+        lambda d: _table(
+            [
+                [a["id"], a["kind"], a["name"], _size(a.get("bytes")), a.get("stored_in", "")]
+                for a in d
+            ],
+            ["ID", "KIND", "NAME", "SIZE", "STORED IN"],
+        ),
+    )
+
+
+def artifacts_download(args: argparse.Namespace) -> None:
+    import urllib.request
+
+    url, token = pf.credentials()
+    meta = call("GET", f"/artifacts/{args.id}")
+    target = args.output or meta["name"]
+    req = urllib.request.Request(
+        f"{url}/artifacts/{args.id}/download", headers={"Authorization": f"Bearer {token}"}
+    )
+    with urllib.request.urlopen(req, timeout=600) as resp:
+        if "json" in (resp.headers.get("Content-Type") or ""):
+            info = json.loads(resp.read())
+            print(f"{meta['name']} lives at {info.get('uri')}; {info.get('note', '')}")
+            return
+        with open(target, "wb") as f:
+            while chunk := resp.read(1 << 20):
+                f.write(chunk)
+    print(f"✓ saved {target} ({_size(meta.get('bytes'))})")
+
+
 def runs_cancel(args: argparse.Namespace) -> None:
     r = call("POST", f"/runs/{args.id}/cancel")
     print(f"run {r['id']} {r['status']}")
@@ -786,9 +831,15 @@ def register(sub: argparse._SubParsersAction) -> None:
         ("view", runs_view, "show a run"),
         ("watch", runs_watch, "stream a run until it ends"),
         ("cancel", runs_cancel, "cancel a run"),
+        ("artifacts", runs_artifacts, "what a run produced (datasets, prompts, checkpoints)"),
     ):
         p = cmd(g, name, fn, help)
         p.add_argument("id", type=int)
+
+    g = group("artifacts", "files runs produced: download them")
+    p = cmd(g, "download", artifacts_download, "download an artifact")
+    p.add_argument("id", type=int)
+    p.add_argument("--output", "-o", help="where to save it (default: its name)")
 
     g = group("connection", "model provider keys, hub accounts and telemetry")
     cmd(g, "services", conn_services, "everything you can connect")

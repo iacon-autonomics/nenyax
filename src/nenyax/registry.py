@@ -121,11 +121,17 @@ def load(uri: str, **options: Any) -> Environment:
         if (path / "nenyax.toml").is_file():  # a folder made with `nenyax new-env`
             from .platform import load_folder
 
-            return load_folder(path)
+            env = load_folder(path)
+            env.manifest.extra.setdefault("uri", str(path.resolve()))
+            return env
         if path.exists():
             for driver in drivers().values():
                 if driver.detect(path):
                     return driver.load(str(path), **query)
         known = ", ".join(sorted(drivers()))
         raise DriverNotFound(f"cannot route {uri!r}; use '<driver>:<target>' with one of: {known}")
-    return drivers()[name].load(target, **query)
+    env = drivers()[name].load(target, **query)
+    # Remember how it was loaded, so another process (an external trainer) can rebuild it.
+    if not options:
+        env.manifest.extra.setdefault("uri", uri)
+    return env

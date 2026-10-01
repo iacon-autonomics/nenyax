@@ -68,3 +68,4 @@ markers = [
 
 [tool.ruff.lint.per-file-ignores]
 "src/nenyax/platform_cli.py" = ["E501"]  # command help and output formats read best on one line
+"src/nenyax/trainers/*.py" = ["E501"]  # generated-code templates and catalog copy

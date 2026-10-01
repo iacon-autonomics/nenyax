@@ -110,6 +110,9 @@ def train(
         cut = max(1, len(shuffled) // 4)
         eval_tasks, pool = shuffled[:cut], shuffled[cut:] or shuffled
     callbacks = list(callbacks)
+    bind = getattr(learner, "bind", None)
+    if callable(bind):  # learners that train outside Nenyax (nenyax.trainers) need the env
+        bind(env, pool, eval_tasks)
 
     result = TrainResult(
         baseline=evaluate(env, learner.policy(), eval_tasks, concurrency=concurrency), best=None
