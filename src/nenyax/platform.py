@@ -55,10 +55,11 @@ def credentials() -> tuple[str, str]:
     return url.rstrip("/"), token
 
 
-def _request(url: str, token: str, *, data: bytes | None = None, headers=None) -> bytes:
-    req = urllib.request.Request(
-        url, data=data, headers={"Authorization": f"Bearer {token}", **(headers or {})}
-    )
+def _request(
+    url: str, token: str, *, data: bytes | None = None, headers=None, method: str | None = None
+) -> bytes:
+    auth = {"Authorization": f"Bearer {token}"} if token else {}
+    req = urllib.request.Request(url, data=data, headers={**auth, **(headers or {})}, method=method)
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             return resp.read()

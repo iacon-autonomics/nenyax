@@ -390,7 +390,20 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("backend")
     p.add_argument("--image", default="python:3.12-slim")
 
+    from . import platform_cli
+
+    platform_cli.register(sub)
     args = parser.parse_args(argv)
+    if hasattr(args, "func"):  # platform command groups (auth, env, project, runs, ...)
+        from .platform import PlatformError
+
+        try:
+            args.func(args)
+        except PlatformError as e:
+            sys.exit(f"✘ {e}")
+        except KeyboardInterrupt:
+            sys.exit(130)
+        return
     handler = {
         "drivers": _cmd_drivers,
         "info": _cmd_info,

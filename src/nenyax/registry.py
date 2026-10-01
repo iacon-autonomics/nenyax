@@ -72,6 +72,7 @@ _BUILTIN: dict[str, str] = {
     "harbor": "nenyax.formats.harbor:HarborDriver",
     "verifiers": "nenyax.formats.verifiers:VerifiersDriver",
     "nemo_gym": "nenyax.formats.nemo_gym:NemoGymDriver",
+    "nenyax": "nenyax.formats.nenyax_hub:NenyaxHubDriver",
 }
 
 
