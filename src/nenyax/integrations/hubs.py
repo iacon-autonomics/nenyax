@@ -87,6 +87,33 @@ class HuggingFaceHub(Hub):
         return listings
 
 
+def _missing_requirements(target: Path, dist: str) -> list[str]:
+    """Requirements of ``dist`` (installed in ``target``) not satisfied by this interpreter."""
+    from importlib import metadata
+
+    from packaging.requirements import Requirement
+
+    found = [d for d in metadata.distributions(path=[str(target)]) if _norm(d.name) == _norm(dist)]
+    if not found:
+        return []
+    missing = []
+    for raw in found[0].requires or []:
+        req = Requirement(raw)
+        if req.marker is not None and not req.marker.evaluate({"extra": ""}):
+            continue
+        try:
+            if req.specifier.contains(metadata.version(req.name), prereleases=True):
+                continue
+        except metadata.PackageNotFoundError:
+            pass
+        missing.append(str(req))
+    return missing
+
+
+def _norm(name: str) -> str:
+    return name.lower().replace("_", "-")
+
+
 class PrimeHub(Hub):
     """The Prime Intellect Environments Hub (Verifiers environments, installed as packages)."""
 
@@ -110,11 +137,46 @@ class PrimeHub(Hub):
         ]
 
     def fetch(self, listing: Listing) -> str:
-        """Install the environment package (public environments need no login)."""
-        cmd = [sys.executable, "-m", "verifiers.cli.commands.install", listing.name]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        """Install the environment package (public environments need no login).
+
+        Where the interpreter's site-packages is read-only (a hardened sandbox, a system Python),
+        the package goes into a writable folder under the Nenyax cache, added to ``sys.path``.
+        """
+        import importlib
+        import sysconfig
+
+        if os.access(sysconfig.get_paths()["purelib"], os.W_OK):
+            cmd = [sys.executable, "-m", "verifiers.cli.commands.install", listing.name]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode != 0:
+                raise NenyaxError(f"installing {listing.name} failed: {proc.stderr[-500:]}")
+            return listing.uri
+        owner, _, name = listing.name.partition("/")
+        target = CACHE / "site-packages"
+        target.mkdir(parents=True, exist_ok=True)
+        index = f"https://hub.primeintellect.ai/{owner}/{name}/install/simple/"
+        import shutil
+
+        pip = (
+            ["uv", "pip", "install", "--quiet", "--python", sys.executable, "--target", str(target)]
+            if shutil.which("uv")
+            else [sys.executable, "-m", "pip", "install", "--quiet", "--target", str(target)]
+        )
+        # The package alone first, then only the requirements this interpreter lacks: a full
+        # --target install would re-download verifiers and everything under it every time.
+        proc = subprocess.run(
+            # --index-url, not --extra-index-url: a same-named PyPI package must never win.
+            [*pip, "--no-deps", "--index-url", index, name],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0 and (missing := _missing_requirements(target, name)):
+            proc = subprocess.run([*pip, *missing], capture_output=True, text=True)
         if proc.returncode != 0:
             raise NenyaxError(f"installing {listing.name} failed: {proc.stderr[-500:]}")
+        if str(target) not in sys.path:
+            sys.path.insert(0, str(target))
+        importlib.invalidate_caches()
         return listing.uri
 
 
