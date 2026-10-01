@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import random
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 from .environment import Environment
@@ -93,11 +93,12 @@ def train(
     concurrency: int = 1,
     callbacks: Iterable[object] = (),
     seed: int = 0,
+    on_round: Callable[[Round], None] | None = None,
 ) -> TrainResult:
     """Run ``rounds`` of: sample ``batch`` tasks × ``group_size`` rollouts, update, evaluate.
 
     With ``gate=True`` and a learner that supports snapshot/restore, an update that lowers the
-    held-out score is reverted.
+    held-out score is reverted. ``on_round`` is called after every round (for live progress).
     """
     rng = random.Random(seed)
     pool = tasks if tasks is not None else env.tasks()
@@ -151,4 +152,6 @@ def train(
                 errors,
             )
         )
+        if on_round is not None:
+            on_round(result.history[-1])
     return result

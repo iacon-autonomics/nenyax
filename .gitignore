@@ -9,3 +9,4 @@ build/
 *.jsonl
 !examples/**/*.jsonl
 .DS_Store
+.playwright-mcp/

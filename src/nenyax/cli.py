@@ -244,6 +244,22 @@ def _cmd_new_plugin(args: argparse.Namespace) -> None:
     print(f"created {path}\n  cd {path} && pip install -e . && pytest")
 
 
+def _cmd_runner(args: argparse.Namespace) -> None:
+    import logging
+
+    from .remote import serve
+
+    token = args.token or os.environ.get("NENYAX_RUNNER_TOKEN")
+    if not token:
+        sys.exit("--token (or NENYAX_RUNNER_TOKEN) is required; create one on the Runners page")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    print(f"runner connecting to {args.url}; jobs run on this machine. Ctrl-C to stop.")
+    try:
+        serve(args.url, token, once=args.once)
+    except KeyboardInterrupt:
+        print("runner stopped")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="nenyax", description=__doc__)
     parser.add_argument("--version", action="version", version=f"nenyax {__version__}")
@@ -310,6 +326,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("name")
     p.add_argument("--dest", default=".")
 
+    p = sub.add_parser("runner", help="run platform jobs on this machine (outbound only)")
+    p.add_argument(
+        "--url", default=os.environ.get("NENYAX_PLATFORM_URL", "http://127.0.0.1:4300/api")
+    )
+    p.add_argument("--token", help="runner token from the Runners page")
+    p.add_argument("--once", action="store_true", help="exit after one job (or none queued)")
+
     sub.add_parser("integrations", help="every integration and what it still needs")
     p = sub.add_parser("search", help="search an environment hub (huggingface, prime, harbor)")
     p.add_argument("hub")
@@ -329,6 +352,7 @@ def main(argv: list[str] | None = None) -> None:
         "serve": _cmd_serve,
         "sandboxes": _cmd_sandboxes,
         "integrations": _cmd_integrations,
+        "runner": _cmd_runner,
         "plugins": _cmd_plugins,
         "new-plugin": _cmd_new_plugin,
         "try": _cmd_try,
