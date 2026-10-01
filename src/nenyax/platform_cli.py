@@ -641,9 +641,12 @@ def runs_view(args: argparse.Namespace) -> None:
 
     def human(r):
         res = r.get("result") or {}
-        print(
-            f"run {r['id']}  {r['kind']}  {r['status']}  on {r['config'].get('target', 'runners')}"
-        )
+        no_model = r["kind"] == "baseline" and not r["config"].get("model")
+        kind = "answer-key check" if no_model else r["kind"]
+        print(f"run {r['id']}  {kind}  {r['status']}")
+        if prov := res.get("provenance"):
+            keys = ("compute", "instance", "gpu", "region")
+            print("  ran on       " + " · ".join(str(prov[k]) for k in keys if prov.get(k)))
         print(f"  environment  {(r.get('listing') or {}).get('slug', '')}")
         for k in ("score", "baseline", "best", "tier", "episodes"):
             if k in res:
@@ -694,6 +697,7 @@ def artifacts_download(args: argparse.Namespace) -> None:
     url, token = pf.credentials()
     meta = call("GET", f"/artifacts/{args.id}")
     target = args.output or meta["name"]
+
     class _NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **kw):  # handle redirects ourselves, below
             return None
