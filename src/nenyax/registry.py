@@ -72,6 +72,7 @@ _BUILTIN: dict[str, str] = {
     "harbor": "nenyax.formats.harbor:HarborDriver",
     "verifiers": "nenyax.formats.verifiers:VerifiersDriver",
     "nemo_gym": "nenyax.formats.nemo_gym:NemoGymDriver",
+    "nenyax": "nenyax.formats.nenyax_hub:NenyaxHubDriver",
 }
 
 
@@ -117,10 +118,20 @@ def load(uri: str, **options: Any) -> Environment:
     query.update(options)
     if name is None:
         path = Path(target).expanduser()
+        if (path / "nenyax.toml").is_file():  # a folder made with `nenyax new-env`
+            from .platform import load_folder
+
+            env = load_folder(path)
+            env.manifest.extra.setdefault("uri", str(path.resolve()))
+            return env
         if path.exists():
             for driver in drivers().values():
                 if driver.detect(path):
                     return driver.load(str(path), **query)
         known = ", ".join(sorted(drivers()))
         raise DriverNotFound(f"cannot route {uri!r}; use '<driver>:<target>' with one of: {known}")
-    return drivers()[name].load(target, **query)
+    env = drivers()[name].load(target, **query)
+    # Remember how it was loaded, so another process (an external trainer) can rebuild it.
+    if not options:
+        env.manifest.extra.setdefault("uri", uri)
+    return env

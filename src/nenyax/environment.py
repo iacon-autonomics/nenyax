@@ -50,6 +50,27 @@ class Session(ABC):
         total = sum(s.reward for s in getattr(self, "history", []))
         return Judgment(score=total, source="env")
 
+    # -- optional introspection: what a person (or a UI) needs to act well ---------------------
+
+    def legal_actions(self) -> list[JSON] | None:
+        """The actions allowed right now, when the set is small and known (a discrete space, a
+        board game's legal moves). None means "any action matching the action schema"."""
+        return None
+
+    def sample_action(self) -> JSON | None:
+        """A random valid action, when the environment can draw one (``action_space.sample``)."""
+        legal = self.legal_actions()
+        if legal:
+            import random
+
+            return random.choice(legal)
+        return None
+
+    def render(self) -> dict[str, JSON] | None:
+        """A view of the current state beyond the observation: ``{"text": ...}`` (an ANSI board,
+        an ASCII map) or ``{"image": "data:image/png;base64,..."}``. None when there is none."""
+        return None
+
     def close(self) -> None:  # noqa: B027 - optional hook
         pass
 
@@ -92,6 +113,31 @@ class Environment(ABC):
         seed: int | None = None,
         max_steps: int | None = None,
     ) -> Trajectory: ...
+
+    def tools(self) -> list[dict[str, JSON]]:
+        """Tools the environment offers an agent, as ``{name, description, parameters}`` (JSON
+        Schema), like an OpenAI tool or an MCP tool listing. Empty when it has none."""
+        tools = self.manifest.extra.get("tools")
+        return list(tools) if isinstance(tools, list) else []
+
+    def describe(self) -> dict[str, JSON]:
+        """Everything a person needs before interacting: what it is, how it is played, what an
+        action looks like, which tools exist, and whether it can be stepped from outside."""
+        m = self.manifest
+        return {
+            "id": m.id,
+            "name": m.name,
+            "description": m.description,
+            "format": m.source_format,
+            "mode": m.mode.value,
+            "steppable": m.mode == Mode.STEP,
+            "capabilities": m.capabilities.model_dump(mode="json"),
+            "action_schema": m.action_schema,
+            "observation_schema": m.observation_schema,
+            "num_tasks": m.num_tasks,
+            "tools": self.tools(),
+            "has_reference_policy": self.reference_policy() is not None,
+        }
 
     def reference_policy(self, task: TaskRef | None = None) -> Policy | None:
         """A policy expected to succeed (an oracle), if the format provides one. Used by audits."""

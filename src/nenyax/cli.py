@@ -244,6 +244,56 @@ def _cmd_new_plugin(args: argparse.Namespace) -> None:
     print(f"created {path}\n  cd {path} && pip install -e . && pytest")
 
 
+def _cmd_runner(args: argparse.Namespace) -> None:
+    import logging
+
+    from .remote import serve
+
+    token = args.token or os.environ.get("NENYAX_RUNNER_TOKEN")
+    if not token:
+        sys.exit("--token (or NENYAX_RUNNER_TOKEN) is required; create one on the Runners page")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    print(f"runner connecting to {args.url}; jobs run on this machine. Ctrl-C to stop.")
+    try:
+        serve(args.url, token, once=args.once)
+    except KeyboardInterrupt:
+        print("runner stopped")
+
+
+def _cmd_login(args: argparse.Namespace) -> None:
+    from . import platform
+
+    platform.save_login(args.url, args.token)
+    try:
+        me = platform.whoami()
+    except platform.PlatformError as e:
+        sys.exit(f"saved, but the platform rejected the token: {e}")
+    print(f"signed in as {me.get('name')} (@{me.get('handle')}) at {args.url}")
+
+
+def _cmd_new_env(args: argparse.Namespace) -> None:
+    from . import platform
+
+    root = platform.new_env(args.name, args.dest)
+    print(f"created {root}/ (env.py, nenyax.toml, README.md)")
+    print(f"  try it:   nenyax try {root}")
+    print(f"  push it:  nenyax push {root}")
+
+
+def _cmd_push(args: argparse.Namespace) -> None:
+    from . import platform
+
+    try:
+        out = platform.push(args.path, public=args.public, org=args.org)
+    except platform.PlatformError as e:
+        sys.exit(str(e))
+    verb = "published" if out["created"] else "updated"
+    print(f"{verb} {out['slug']} {out['version']} ({out['bytes'] / 1024:.1f} KB)")
+    print(f"  {out['url']}")
+    if out.get("check_run"):
+        print(f"  conformance check queued on Nenyax Cloud (run {out['check_run']})")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="nenyax", description=__doc__)
     parser.add_argument("--version", action="version", version=f"nenyax {__version__}")
@@ -310,6 +360,26 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("name")
     p.add_argument("--dest", default=".")
 
+    p = sub.add_parser("runner", help="run platform jobs on this machine (outbound only)")
+    p.add_argument(
+        "--url", default=os.environ.get("NENYAX_PLATFORM_URL", "http://127.0.0.1:4300/api")
+    )
+    p.add_argument("--token", help="runner token from the Runners page")
+    p.add_argument("--once", action="store_true", help="exit after one job (or none queued)")
+
+    p = sub.add_parser("login", help="sign in to a Nenyax platform with a personal access token")
+    p.add_argument(
+        "--url", default=os.environ.get("NENYAX_PLATFORM_URL", "http://127.0.0.1:4300/api")
+    )
+    p.add_argument("--token", required=True, help="nxp_... from Settings → Tokens")
+    p = sub.add_parser("new-env", help="create an environment folder ready to push")
+    p.add_argument("name")
+    p.add_argument("--dest", default=".")
+    p = sub.add_parser("push", help="publish an environment folder to the platform")
+    p.add_argument("path", nargs="?", default=".")
+    p.add_argument("--public", action="store_true", help="list it publicly (default: private)")
+    p.add_argument("--org", help="publish under an organization you belong to")
+
     sub.add_parser("integrations", help="every integration and what it still needs")
     p = sub.add_parser("search", help="search an environment hub (huggingface, prime, harbor)")
     p.add_argument("hub")
@@ -320,7 +390,20 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("backend")
     p.add_argument("--image", default="python:3.12-slim")
 
+    from . import platform_cli
+
+    platform_cli.register(sub)
     args = parser.parse_args(argv)
+    if hasattr(args, "func"):  # platform command groups (auth, env, project, runs, ...)
+        from .platform import PlatformError
+
+        try:
+            args.func(args)
+        except PlatformError as e:
+            sys.exit(f"✘ {e}")
+        except KeyboardInterrupt:
+            sys.exit(130)
+        return
     handler = {
         "drivers": _cmd_drivers,
         "info": _cmd_info,
@@ -329,12 +412,16 @@ def main(argv: list[str] | None = None) -> None:
         "serve": _cmd_serve,
         "sandboxes": _cmd_sandboxes,
         "integrations": _cmd_integrations,
+        "runner": _cmd_runner,
         "plugins": _cmd_plugins,
         "new-plugin": _cmd_new_plugin,
         "try": _cmd_try,
         "train": _cmd_train,
         "search": _cmd_search,
         "sandbox-check": _cmd_sandbox_check,
+        "login": _cmd_login,
+        "new-env": _cmd_new_env,
+        "push": _cmd_push,
     }
     try:
         handler[args.command](args)
