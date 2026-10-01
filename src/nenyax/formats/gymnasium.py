@@ -92,6 +92,23 @@ class GymnasiumSession(Session):
         self.done = step.done
         return step
 
+    def legal_actions(self) -> list[JSON] | None:
+        from gymnasium import spaces as S
+
+        space = self.env.action_space
+        if isinstance(space, S.Discrete) and space.n <= 64:
+            return [int(space.start + i) for i in range(space.n)]
+        return None
+
+    def sample_action(self) -> JSON | None:
+        return to_json(self.env.action_space.sample())
+
+    def render(self) -> dict[str, JSON] | None:
+        if getattr(self.env, "render_mode", None) != "ansi":
+            return None
+        frame = self.env.render()
+        return {"text": frame} if isinstance(frame, str) else None
+
     def judge(self) -> Judgment:
         return Judgment(
             score=sum(s.reward for s in self.history),
@@ -135,8 +152,16 @@ class GymnasiumEnvironment(StepEnvironment):
         finally:
             probe.close()
 
-    def session(self, *, task: TaskRef | None = None, seed: int | None = None) -> GymnasiumSession:
-        return GymnasiumSession(self._gym.make(self._env_id, **self._kwargs), seed)
+    def session(
+        self, *, task: TaskRef | None = None, seed: int | None = None, render: bool = False
+    ) -> GymnasiumSession:
+        env = self._gym.make(self._env_id, **self._kwargs)
+        # Text-renderable envs (FrozenLake, Taxi, Blackjack...) draw their board for people.
+        modes = env.metadata.get("render_modes", [])
+        if render and "render_mode" not in self._kwargs and "ansi" in modes:
+            env.close()
+            env = self._gym.make(self._env_id, render_mode="ansi", **self._kwargs)
+        return GymnasiumSession(env, seed)
 
     def random_policy(self, seed: int | None = None):
         space = self._gym.make(self._env_id, **self._kwargs).action_space

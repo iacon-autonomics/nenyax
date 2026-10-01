@@ -175,6 +175,37 @@ def _load_env(
     return load(spec["uri"])
 
 
+SESSION_IDLE_S = 5 * 60  # an abandoned playground frees its compute quickly
+
+
+def _serve_session(env: Any, events: _Events) -> dict[str, Any]:
+    """Keep the environment open and answer playground operations until closed or idle."""
+    from .playground import Playground
+
+    client, run_id = events.client, events.run_id
+    pg = Playground(env)
+    client.call(f"/runner/runs/{run_id}/ready", {"describe": pg.describe()})
+    served, idle_since = 0, time.monotonic()
+    while time.monotonic() - idle_since < SESSION_IDLE_S:
+        try:
+            op = client.call(f"/runner/runs/{run_id}/ops/next").get("op")
+        except (urllib.error.URLError, OSError) as e:
+            log.warning("playground poll failed: %s", e)
+            time.sleep(2)
+            continue
+        if not op:
+            continue
+        if op["op"] == "end":
+            if op.get("id"):
+                client.call(f"/runner/runs/{run_id}/ops/{op['id']}", {"result": {"ended": True}})
+            break
+        result = pg.handle(op["op"], op.get("args") or {})
+        client.call(f"/runner/runs/{run_id}/ops/{op['id']}", {"result": result})
+        served, idle_since = served + 1, time.monotonic()
+    pg.close()
+    return {"operations": served}
+
+
 def _policy(env: Any, model: dict[str, Any] | None, task: Any = None) -> Any:
     if model:
         from .config import build
@@ -231,6 +262,9 @@ def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any
             events.emit("episode", _episode(traj, i))
         events.flush()
         return {"score": sum(scores) / len(scores) if scores else 0.0, "episodes": len(scores)}
+
+    if kind == "session":
+        return _serve_session(env, events)
 
     if kind == "check":
         report = conformance(
