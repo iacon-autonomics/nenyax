@@ -117,6 +117,10 @@ def load(uri: str, **options: Any) -> Environment:
     query.update(options)
     if name is None:
         path = Path(target).expanduser()
+        if (path / "nenyax.toml").is_file():  # a folder made with `nenyax new-env`
+            from .platform import load_folder
+
+            return load_folder(path)
         if path.exists():
             for driver in drivers().values():
                 if driver.detect(path):

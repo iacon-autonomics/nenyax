@@ -150,11 +150,19 @@ def _episode(traj: Any, index: int) -> dict[str, Any]:
     }
 
 
-def _load_env(spec: dict[str, Any], max_tasks: int | None) -> Any:
+def _load_env(
+    spec: dict[str, Any], max_tasks: int | None, client: PlatformClient | None = None
+) -> Any:
     from . import integrations
     from .registry import load
 
     fetch = spec.get("fetch")
+    if fetch and fetch.get("hub") == "nenyax":  # pushed to the platform with `nenyax push`
+        if client is None:
+            raise RuntimeError("platform packages load through a runner connected to the platform")
+        from .platform import load_package
+
+        return load_package(fetch, client.url, client.token)
     if fetch:  # hub listings: install or download on this machine first
         hub = integrations.hubs()[fetch["hub"]]
         wanted = fetch["name"]
@@ -190,7 +198,11 @@ def execute(kind: str, config: dict[str, Any], events: _Events) -> dict[str, Any
 
     params = config.get("params") or {}
     events.emit("progress", {"stage": "loading environment"}, flush=True)
-    env = _load_env(config["env"], max_tasks=int(params.get("max_tasks", 3)))
+    env = _load_env(
+        config["env"],
+        max_tasks=int(params.get("max_tasks", 3)),
+        client=getattr(events, "client", None),
+    )
     events.emit(
         "progress",
         {"stage": "loaded", "env": env.id, "mode": env.mode.value, "tasks": env.manifest.num_tasks},
