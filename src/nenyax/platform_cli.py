@@ -410,6 +410,146 @@ def project_export(args: argparse.Namespace) -> None:
         print(text)
 
 
+def project_stack(args: argparse.Namespace) -> None:
+    """Show or change the project's stack: which plug fills each slot."""
+    slug = _slug(args.project)
+    patch: dict[str, Any] = {}
+
+    def slot(name: str, plug: str | None, conn: int | None, config: dict[str, Any]) -> None:
+        if plug:
+            patch[name] = {"plug": plug, "connection_id": conn, "config": config}
+
+    compute_cfg = {
+        k: v
+        for k, v in {
+            "gpu": args.gpu,
+            "gpu_count": args.gpu_count,
+            "cpu": args.cpu,
+            "memory_mb": args.memory,
+            "region": args.region,
+        }.items()
+        if v is not None
+    }
+    compute_cfg.update(_params(args.compute_config))
+    slot("compute", args.compute, args.compute_connection, compute_cfg)
+    slot("sandbox", args.sandbox, args.sandbox_connection, {})
+    slot("trainer", args.trainer, args.trainer_connection, _params(args.trainer_config))
+    slot("storage", args.storage, args.storage_connection, {})
+    slot("serving", args.serving, None, {})
+    if args.tracking:
+        patch["tracking"] = [
+            {
+                "plug": t.split(":")[0],
+                "connection_id": int(t.split(":")[1]) if ":" in t else None,
+                "config": {},
+            }
+            for t in args.tracking
+        ]
+    routing = {}
+    if args.fallback:
+        routing["fallback"] = [x.strip() for x in args.fallback.split(",") if x.strip()]
+    if args.prefer:
+        routing["prefer"] = args.prefer
+    if args.max_cost is not None:
+        routing["max_cost_usd"] = args.max_cost
+    if args.budget is not None:
+        routing["project_budget_usd"] = args.budget
+    if routing:
+        current = (call("GET", f"/projects/{slug}").get("stack") or {}).get("routing") or {}
+        patch["routing"] = {**current, **routing}
+    p = (
+        call("PATCH", f"/projects/{slug}", {"stack": patch})
+        if patch
+        else call("GET", f"/projects/{slug}")
+    )
+    stack = p.get("stack") or {}
+
+    def human(stack):
+        if patch:
+            print(f"✓ updated the stack of {p['slug']}")
+        print(f"{p['slug']}  runs on {p.get('compute_target')}")
+        for name in ("compute", "sandbox", "trainer", "serving", "storage"):
+            entry = stack.get(name) or {}
+            if entry:
+                conn = (
+                    f"  (connection {entry['connection_id']})" if entry.get("connection_id") else ""
+                )
+                cfg = "  " + json.dumps(entry["config"]) if entry.get("config") else ""
+                print(f"  {name:<9} {entry.get('plug')}{conn}{cfg}")
+            else:
+                print(f"  {name:<9} default")
+        for t in stack.get("tracking") or []:
+            print(f"  tracking  {t['plug']} (connection {t.get('connection_id')})")
+        if stack.get("routing"):
+            print(f"  routing   {json.dumps(stack['routing'])}")
+
+    _emit(args, stack, human)
+
+
+def compute_list(args: argparse.Namespace) -> None:
+    d = call("GET", "/compute")
+
+    def human(d):
+        conns: dict[str, list] = {}
+        for c in d["connections"]:
+            conns.setdefault(c["plug"], []).append(c)
+        rows = []
+        for p in d["plugs"]:
+            mine = conns.get(p["id"], [])
+            ready = (
+                "built in"
+                if not p.get("service")
+                else (
+                    ", ".join(f"#{c['id']} {c['label']} ({c['running']} running)" for c in mine)
+                    or f"connect: nenyax connection add {p['service']}"
+                )
+            )
+            rows.append([p["id"], p["status"], "yes" if p.get("gpu") else "", ready])
+        _table(rows, ["PLUG", "STATUS", "GPU", "YOUR ACCOUNTS"])
+
+    _emit(args, d, human)
+
+
+def compute_test(args: argparse.Namespace) -> None:
+    d = call("POST", f"/compute/{args.id}/test")
+    mark = "✓" if d["ok"] else "✘"
+    print(
+        f"{mark} {d['plug']} ({d['status']}): about ${d['estimate_usd_hr']}/h for a typical shape"
+    )
+    for problem in d["problems"]:
+        print(f"  {problem}")
+    if d["needs"]:
+        print(f"  needs: {', '.join(d['needs'])}")
+
+
+def runs_compare(args: argparse.Namespace) -> None:
+    d = call("GET", "/runs/compare?ids=" + ",".join(str(i) for i in args.ids))
+
+    def human(d):
+        rows = [
+            [
+                r["id"],
+                r["kind"],
+                r["status"],
+                r.get("model") or "reference",
+                r.get("learner") or "",
+                (r.get("provenance") or {}).get("compute") or r["stack"].get("compute", ""),
+                _score(r.get("score")),
+                f"${r['cost_usd']:.4f}" if isinstance(r.get("cost_usd"), int | float) else "",
+                r.get("seconds") or "",
+            ]
+            for r in d["runs"]
+        ]
+        _table(
+            rows,
+            ["ID", "KIND", "STATUS", "MODEL", "LEARNER", "COMPUTE", "SCORE", "COST", "SECONDS"],
+        )
+        if d["differs"]:
+            print(f"\n  differs in: {', '.join(d['differs'])}")
+
+    _emit(args, d, human)
+
+
 def project_delete(args: argparse.Namespace) -> None:
     slug = _slug(args.project)
     if (
@@ -548,15 +688,28 @@ def runs_artifacts(args: argparse.Namespace) -> None:
 
 
 def artifacts_download(args: argparse.Namespace) -> None:
+    import urllib.error
     import urllib.request
 
     url, token = pf.credentials()
     meta = call("GET", f"/artifacts/{args.id}")
     target = args.output or meta["name"]
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **kw):  # handle redirects ourselves, below
+            return None
+
     req = urllib.request.Request(
         f"{url}/artifacts/{args.id}/download", headers={"Authorization": f"Bearer {token}"}
     )
-    with urllib.request.urlopen(req, timeout=600) as resp:
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        resp = opener.open(req, timeout=600)
+    except urllib.error.HTTPError as e:
+        if e.code not in (301, 302, 303, 307, 308):
+            raise
+        # A presigned storage URL: fetch it WITHOUT our token (S3 rejects it; it must not leak).
+        resp = urllib.request.urlopen(e.headers["Location"], timeout=600)
+    with resp:
         if "json" in (resp.headers.get("Content-Type") or ""):
             info = json.loads(resp.read())
             print(f"{meta['name']} lives at {info.get('uri')}; {info.get('note', '')}")
@@ -818,6 +971,34 @@ def register(sub: argparse._SubParsersAction) -> None:
     p = cmd(g, "export", project_export, "the project as nenyax.toml, to run locally")
     p.add_argument("project")
     p.add_argument("--output", "-o")
+    p = cmd(g, "stack", project_stack, "show or change which plug fills each slot")
+    p.add_argument("project")
+    p.add_argument(
+        "--compute",
+        help="nenyax-cloud, runners, docker, kubernetes, ssh, modal, runpod, lambda, aws, gcp, prime-compute",
+    )
+    p.add_argument("--compute-connection", type=int, metavar="ID")
+    p.add_argument("--gpu", help="e.g. A100, H100, L4")
+    p.add_argument("--gpu-count", type=int)
+    p.add_argument("--cpu", type=float)
+    p.add_argument("--memory", type=int, metavar="MB")
+    p.add_argument("--region")
+    p.add_argument("--compute-config", action="append", metavar="KEY=VALUE")
+    p.add_argument("--sandbox", help="nenyax, process, docker, e2b, daytona, modal, runloop")
+    p.add_argument("--sandbox-connection", type=int, metavar="ID")
+    p.add_argument("--trainer", help="nenyax, trl, verl, prime-rl, openrlhf, unsloth, tinker")
+    p.add_argument("--trainer-connection", type=int, metavar="ID")
+    p.add_argument("--trainer-config", action="append", metavar="KEY=VALUE")
+    p.add_argument("--serving", help="api, vllm, sglang")
+    p.add_argument("--storage", help="nenyax, s3, gcs, r2, hf")
+    p.add_argument("--storage-connection", type=int, metavar="ID")
+    p.add_argument(
+        "--tracking", action="append", metavar="PLUG:CONNECTION", help="e.g. wandb:12 (repeatable)"
+    )
+    p.add_argument("--fallback", help="compute plugs to try next, e.g. runpod,modal")
+    p.add_argument("--prefer", choices=["first", "cheapest", "fastest"])
+    p.add_argument("--max-cost", type=float, metavar="USD", help="per-run budget")
+    p.add_argument("--budget", type=float, metavar="USD", help="per-project budget")
     p = cmd(g, "delete", project_delete, "delete a project")
     p.add_argument("project")
     p.add_argument("--yes", action="store_true")
@@ -835,6 +1016,14 @@ def register(sub: argparse._SubParsersAction) -> None:
     ):
         p = cmd(g, name, fn, help)
         p.add_argument("id", type=int)
+
+    p = cmd(g, "compare", runs_compare, "runs side by side: scores, where they ran, cost")
+    p.add_argument("ids", type=int, nargs="+")
+
+    g = group("compute", "where runs execute: plugs and your compute accounts")
+    cmd(g, "list", compute_list, "compute plugs and your accounts", "ls")
+    p = cmd(g, "test", compute_test, "check a compute connection (no machine is started)")
+    p.add_argument("id", type=int)
 
     g = group("artifacts", "files runs produced: download them")
     p = cmd(g, "download", artifacts_download, "download an artifact")
